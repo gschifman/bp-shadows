@@ -1,0 +1,53 @@
+library(ggplot2)
+
+#Chart 1: Lines through time
+time_data <- rbind(
+    setNames(cbind("Strikeouts",plot(k_time, i.var="local_time_two", n.trees=gbm.perf(k_time, plot.it=FALSE), continuous.resolution=100, return.grid=TRUE, type="response")),c("iteration","time","ypred")),
+    setNames(cbind("Walks",plot(walk_time, i.var="local_time_two", n.trees=gbm.perf(walk_time, plot.it=FALSE), continuous.resolution=100, return.grid=TRUE, type="response")),c("iteration","time","ypred")))
+
+quartzFonts(avenir_next=c("Avenir Next Medium", "Avenir Next Demi Bold", "Avenir Next Bold", "Avenir Next Bold Italic"))
+
+ggsave("kbb_thru_time.png", plot=(
+ggplot(time_data, aes(x=time, y=ypred, colour=iteration)) +
+    geom_line(lwd=1.5) +
+    scale_colour_manual(values=c("Strikeouts"="darkgreen","Walks"="limegreen")) +
+    coord_cartesian(xlim=c(13.75,22.01), ylim=c(-0.0003,0.3003)) +
+    theme(panel.grid=element_blank(), panel.background=element_rect(fill="ivory1")) +
+    geom_hline(yintercept=seq(0,0.3,by=0.05), linetype="dashed", colour="ivory4", alpha=0.35, size=.4) +
+    geom_vline(xintercept=seq(14,22,by=2), linetype="dashed", colour="ivory4", alpha=0.35, size=.4) +
+    scale_y_continuous(expand=c(0,0), breaks=seq(0,0.3,0.05), labels=c("0%","5%","10%","15%","20%","25%","30%")) +
+    scale_x_continuous(expand=c(0,0), breaks=seq(14,22,2), labels=c("2 PM","4 PM","6 PM","8 PM","10 PM")) +
+    labs(title="Average strikeout and walk rates by time of day") +
+    annotate("rect", xmin=19.68, xmax=21.32, ymin=0.231, ymax=0.259, fill="darkgreen") + annotate("text", x=20.5, y=0.245, label="Strikeouts", colour="ivory1", family="avenir_next", size=5.5, fontface="bold") +
+    annotate("rect", xmin=20.15, xmax=21.25, ymin=0.093, ymax=0.121, fill="limegreen") + annotate("text", x=20.7, y=0.107, label="Walks", colour="ivory1", family="avenir_next", size=5.5, fontface="bold") +
+    theme(plot.title=element_text(family="avenir_next", size=16, face="bold", margin=margin(t=5, b=23)),
+        plot.margin=unit(c(0.6,1.1,0.8,0.8), "cm"),
+        axis.text.x=element_text(family="avenir_next", size=11), axis.text.y=element_text(family="avenir_next", size=12),
+        axis.ticks=element_line(colour="ivory3", size=.4), axis.title=element_blank(), legend.position="none")
+),device="png", path="/Users/geraldschifman/Documents/__Shadows", units="cm", dpi=500, width=18, height=14)
+
+
+#Chart 2: Heat maps
+sun_data <- rbind(
+    setNames(cbind("Strikeouts",plot(k_sun, i.var=c("azimuth_deg","altitude_deg"), n.trees=gbm.perf(k_sun, plot.it=FALSE), continuous.resolution=33, return.grid=TRUE, type="response")),c("iteration","azimuth","altitude","ypred")),
+    setNames(cbind("Walks",plot(walk_sun, i.var=c("azimuth_deg","altitude_deg"), n.trees=gbm.perf(walk_sun, plot.it=FALSE), continuous.resolution=33, return.grid=TRUE, type="response")),c("iteration","azimuth","altitude","ypred")))
+sun_data$ypred2 <- round(ifelse(sun_data$iteration=="Strikeouts",(sun_data$ypred-(sum(shadows_kbb_train$is_k)/nrow(shadows_kbb_train))),(sun_data$ypred-(sum(shadows_kbb_train$is_bb)/nrow(shadows_kbb_train)))), digits=6)
+
+quartzFonts(avenir_next=c("Avenir Next Medium", "Avenir Next Demi Bold", "Avenir Next Bold", "Avenir Next Bold Italic"))
+
+ggsave("kbb_heatmaps.png", plot=(
+ggplot(sun_data, aes(x=azimuth, y=altitude)) + 
+    geom_tile(aes(fill=ypred2)) +
+    scale_fill_gradient2("Difference from\nleague average", low="dodgerblue", mid="ghostwhite", high="firebrick1", guide="colourbar", midpoint=0, limits=c(-0.02,0.02), breaks=c(-0.02,-0.01,0,0.01,0.02), labels=c("–2%","–1%","0%","+1%","+2%")) +
+    coord_fixed(ratio=1, xlim=c(0,120), ylim=c(0,60)) +
+    facet_wrap(.~iteration, ncol=1) +
+    labs(title="Change in strikeout and walk rates by sun angle", x="Azimuth", y="Altitude") +
+    scale_y_continuous(expand=c(0,0), breaks=seq(0,60,20), labels=c("0°","20°","40°","60°")) +
+    scale_x_continuous(expand=c(0,0), breaks=seq(0,120,30), labels=c("0°","30°","60°","90°","120°")) +
+    theme(plot.title=element_text(size=16, face="bold", margin=margin(t=-5, b=18), family="avenir_next", hjust=0.45)) +
+    theme(axis.text.x=element_text(size=12.5, colour="grey5", family="avenir_next"), axis.text.y=element_text(size=12.5, colour="grey5", family="avenir_next"), axis.ticks.x=element_line(colour="ivory3", size=.4), axis.ticks.y=element_line(colour="ivory3", size=.4), axis.title.x=element_text(family="avenir_next", size=14, margin=margin(t=18, b=-6)), axis.title.y=element_text(family="avenir_next", size=14, margin=margin(l=-5, r=19))) +
+    theme(plot.margin=unit(c(0.5,0.7,0.5,0.7), "cm"), panel.spacing=unit(1.7, "lines"), strip.background=element_rect(colour="snow3", fill="snow"), strip.text=element_text(size=13.5, face="bold", family="avenir_next")) +
+    theme(legend.key.size=unit(0.8,"cm"), legend.key.height=unit(1.6,"cm"), legend.title=element_text(size=13, face="bold", family="avenir_next"), legend.text=element_text(size=12.5, family="avenir_next"), legend.margin=margin(l=16, r=-10)) +
+    geom_hline(yintercept=seq(0,40,by=20), linetype="dashed", colour="ivory4", alpha=0.25, size=.4) +
+    geom_vline(xintercept=seq(0,120,by=30), linetype="dashed", colour="ivory4", alpha=0.25, size=.4)
+),device="png",path="/Users/geraldschifman/Documents/__Shadows",units="cm",dpi=500, width=17, height=16.5)
