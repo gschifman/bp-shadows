@@ -1,0 +1,146 @@
+shadows_full <- read.csv("/Users/geraldschifman/Documents/__Shadows/Inserts/shadow_position.csv", header=TRUE)
+shadows_full <- shadows_full[with(shadows_full, start_time!="03:33 am" & pitcher_position %in% c("P","RP") & venue %in% c("Angel Stadium","Busch Stadium","Citi Field","Citizens Bank Park","Comerica Park","Coors Field","Dodger Stadium","Fenway Park","Guaranteed Rate Field","Kauffman Stadium","Nationals Park","Oakland Coliseum","Oracle Park","Oriole Park at Camden Yards","Petco Park","PNC Park","Progressive Field","SunTrust Park","Target Field","Wrigley Field","Yankee Stadium")), !(colnames(shadows_full) %in% c("forecast","wind_dir","precip_park_cd"))]
+
+shadows_full <- shadows_full[!duplicated(shadows_full),]
+
+shadows_full$local_time_two <- with(shadows_full, (as.numeric(substr(local_time_pitch,12,13)) + (as.numeric(substr(local_time_pitch,15,16))/60) + (as.numeric(substr(local_time_pitch,18,19))/3600)))
+shadows_full$is_bb <- ifelse(shadows_full$outcome=="B",1,0)
+shadows_full$is_k <- ifelse(shadows_full$outcome=="S",1,0)
+shadows_full$half_factor <- as.factor(ifelse(shadows_full$half=="1","top","bot"))
+shadows_full$altitude_deg <- shadows_full$altitude*(180/pi)
+shadows_full$azimuth_deg <- shadows_full$azimuth*(180/pi)
+
+shadows_full <- shadows_full[with(shadows_full, order(game_string, pitcher_mlbid, batter_mlbid, pitch_id)),]
+shadows_full <- shadows_full[with(shadows_full, local_time_two>=13.16666 & local_time_two<=22.5),]
+
+library(dplyr)
+shadows_full <- shadows_full %>%
+ group_by(game_string, pitcher_mlbid, batter_mlbid) %>%
+ mutate(tto_mod=1:n())
+shadows_full$tto_mod_factor <- as.factor(shadows_full$tto_mod)
+
+shadows_full$rand <- round(runif(nrow(shadows_full), min=0, max=1),6)
+shadows_full <- shadows_full[order(shadows_full$rand),]
+rownames(shadows_full) <- NULL
+
+shadows_kbb_train <- (shadows_full[shadows_full$rand>0.4, c("game_string","pitch_id","pitcher_name","batter_name","rand","is_k","is_bb","throws","pitcher_position","preseason_pitcher_k_pa_pct","preseason_pitcher_bb_pa_pct","stand","preseason_k_pa_pct","preseason_bb_pa_pct","home","inning","half_factor","tto_mod_factor","local_time_two","altitude_deg","azimuth_deg","orientation")])
+
+shadows_kbb_test <- (shadows_full[shadows_full$rand<=0.4, c("game_string","pitch_id","pitcher_name","batter_name","rand","is_k","is_bb","throws","pitcher_position","preseason_pitcher_k_pa_pct","preseason_pitcher_bb_pa_pct","stand","preseason_k_pa_pct","preseason_bb_pa_pct","home","inning","half_factor","tto_mod_factor","local_time_two","altitude_deg","azimuth_deg","orientation")])
+
+library(gbm)
+k_time_grid <- expand.grid(
+  interaction.depth=c(1,2,3),
+  n.minobsinnode=c(50,100,150,200),
+  bag.fraction=c(0.5,0.75,1), 
+  optimal_trees=0,
+  brier_score=0)
+
+for(i in 1:nrow(k_time_grid)) {
+	set.seed(23)
+	gbm.tune <- gbm(
+		formula = is_k ~ throws + pitcher_position + preseason_pitcher_k_pa_pct + stand + preseason_k_pa_pct + home + inning + half_factor + tto_mod_factor + local_time_two,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=2500, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=k_time_grid$interaction.depth[i], n.minobsinnode=k_time_grid$n.minobsinnode[i], bag.fraction=k_time_grid$bag.fraction[i],
+    	verbose = FALSE)
+  
+	k_time_grid$optimal_trees[i] <- gbm.perf(gbm.tune, plot.it=FALSE)
+	k_time_grid$brier_score[i] <- round(mean((predict(object=gbm.tune, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(gbm.tune, plot.it=FALSE), type="response")-shadows_kbb_test$is_k)^2),6)
+}
+
+k_sun_grid <- expand.grid(
+  interaction.depth=c(1,2,3),
+  n.minobsinnode=c(50,100,150,200),
+  bag.fraction=c(0.5,0.75,1), 
+  optimal_trees=0,
+  brier_score=0)
+
+for(i in 1:nrow(k_sun_grid)) {
+	set.seed(23)
+	gbm.tune <- gbm(
+		formula = is_k ~ throws + pitcher_position + preseason_pitcher_k_pa_pct + stand + preseason_k_pa_pct + home + inning + half_factor + tto_mod_factor + altitude_deg + azimuth_deg + orientation,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=2500, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=k_sun_grid$interaction.depth[i], n.minobsinnode=k_sun_grid$n.minobsinnode[i], bag.fraction=k_sun_grid$bag.fraction[i],
+    	verbose = FALSE)
+  
+	k_sun_grid$optimal_trees[i] <- gbm.perf(gbm.tune, plot.it=FALSE)
+	k_sun_grid$brier_score[i] <- round(mean((predict(object=gbm.tune, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(gbm.tune, plot.it=FALSE), type="response")-shadows_kbb_test$is_k)^2),6)
+}
+
+walk_time_grid <- expand.grid(
+  interaction.depth=c(1,2,3),
+  n.minobsinnode=c(50,100,150,200),
+  bag.fraction=c(0.5,0.75,1), 
+  optimal_trees=0,
+  brier_score=0)
+
+for(i in 1:nrow(walk_time_grid)) {
+	set.seed(22)
+	gbm.tune <- gbm(
+		formula = is_bb ~ throws + pitcher_position + preseason_pitcher_bb_pa_pct + stand + preseason_bb_pa_pct + home + inning + half_factor + tto_mod_factor + local_time_two,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=300, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=walk_time_grid$interaction.depth[i], n.minobsinnode=walk_time_grid$n.minobsinnode[i], bag.fraction=walk_time_grid$bag.fraction[i],
+    	verbose = FALSE)
+  
+	walk_time_grid$optimal_trees[i] <- gbm.perf(gbm.tune, plot.it=FALSE)
+	walk_time_grid$brier_score[i] <- round(mean((predict(object=gbm.tune, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(gbm.tune, plot.it=FALSE), type="response")-shadows_kbb_test$is_bb)^2),6)
+}
+
+walk_sun_grid <- expand.grid(
+  interaction.depth=c(1,2,3),
+  n.minobsinnode=c(50,100,150,200),
+  bag.fraction=c(0.5,0.75,1), 
+  optimal_trees=0,
+  brier_score=0)
+
+for(i in 1:nrow(walk_sun_grid)) {
+	set.seed(22)
+	gbm.tune <- gbm(
+		formula = is_bb ~ throws + pitcher_position + preseason_pitcher_bb_pa_pct + stand + preseason_bb_pa_pct + home + inning + half_factor + tto_mod_factor + altitude_deg + azimuth_deg + orientation,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=300, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=walk_sun_grid$interaction.depth[i], n.minobsinnode=walk_sun_grid$n.minobsinnode[i], bag.fraction=walk_sun_grid$bag.fraction[i],
+    	verbose = FALSE)
+  
+	walk_sun_grid$optimal_trees[i] <- gbm.perf(gbm.tune, plot.it=FALSE)
+	walk_sun_grid$brier_score[i] <- round(mean((predict(object=gbm.tune, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(gbm.tune, plot.it=FALSE), type="response")-shadows_kbb_test$is_bb)^2),6)
+}
+
+#Based on the grids
+set.seed(23)
+k_time <- gbm(
+		formula = is_k ~ throws + pitcher_position + preseason_pitcher_k_pa_pct + stand + preseason_k_pa_pct + home + inning + half_factor + tto_mod_factor + local_time_two,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=2500, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=2, n.minobsinnode=50, bag.fraction=0.75,
+    	verbose=FALSE)
+
+set.seed(23)
+k_sun <- gbm(
+		formula = is_k ~ throws + pitcher_position + preseason_pitcher_k_pa_pct + stand + preseason_k_pa_pct + home + inning + half_factor + tto_mod_factor + altitude_deg + azimuth_deg + orientation,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=2500, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=3, n.minobsinnode=200, bag.fraction=0.75,
+    	verbose = FALSE)
+
+set.seed(22)
+walk_time <- gbm(
+		formula = is_bb ~ throws + pitcher_position + preseason_pitcher_bb_pa_pct + stand + preseason_bb_pa_pct + home + inning + half_factor + tto_mod_factor + local_time_two,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=300, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=3, n.minobsinnode=150, bag.fraction=0.75,
+    	verbose = FALSE)
+
+set.seed(22)
+walk_sun <- gbm(
+		formula = is_bb ~ throws + pitcher_position + preseason_pitcher_bb_pa_pct + stand + preseason_bb_pa_pct + home + inning + half_factor + tto_mod_factor + altitude_deg + azimuth_deg + orientation,
+		data=shadows_kbb_train, distribution="bernoulli", n.trees=300, shrinkage=0.05, train.fraction=0.7,
+    	interaction.depth=3, n.minobsinnode=150, bag.fraction=0.75,
+    	verbose = FALSE)
+
+shadows_kbb_test$k_time_pred <- predict(object=k_time, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(k_time, plot.it=FALSE), type="response")
+with(shadows_kbb_test, round(mean((k_time_pred-is_k)^2),digits=6))
+
+shadows_kbb_test$k_sun_pred <- predict(object=k_sun, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(k_sun, plot.it=FALSE), type="response")
+with(shadows_kbb_test, round(mean((k_sun_pred-is_k)^2),digits=6))
+
+shadows_kbb_test$walk_time_pred <- predict(object=walk_time, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(walk_time, plot.it=FALSE), type="response")
+with(shadows_kbb_test, round(mean((walk_time_pred-is_bb)^2),digits=6))
+
+shadows_kbb_test$walk_sun_pred <- predict(object=walk_sun, newdata=shadows_kbb_test[,8:22], n.trees=gbm.perf(walk_sun, plot.it=FALSE), type="response")
+with(shadows_kbb_test, round(mean((walk_sun_pred-is_bb)^2),digits=6))
