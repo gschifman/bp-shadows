@@ -1,4 +1,3 @@
-shadows_full <- read.csv("/Users/geraldschifman/Documents/__Shadows/Inserts/shadow_position.csv", header=TRUE)
 shadows_full <- shadows_full[with(shadows_full, start_time!="03:33 am" & pitcher_position %in% c("P","RP") & venue %in% c("Angel Stadium","Busch Stadium","Citi Field","Citizens Bank Park","Comerica Park","Coors Field","Dodger Stadium","Fenway Park","Guaranteed Rate Field","Kauffman Stadium","Nationals Park","Oakland Coliseum","Oracle Park","Oriole Park at Camden Yards","Petco Park","PNC Park","Progressive Field","SunTrust Park","Target Field","Wrigley Field","Yankee Stadium")), !(colnames(shadows_full) %in% c("forecast","wind_dir","precip_park_cd"))]
 
 shadows_full <- shadows_full[!duplicated(shadows_full),]
