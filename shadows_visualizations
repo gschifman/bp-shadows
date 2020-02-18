@@ -7,7 +7,6 @@ time_data <- rbind(
 
 quartzFonts(avenir_next=c("Avenir Next Medium", "Avenir Next Demi Bold", "Avenir Next Bold", "Avenir Next Bold Italic"))
 
-ggsave("kbb_thru_time.png", plot=(
 ggplot(time_data, aes(x=time, y=ypred, colour=iteration)) +
     geom_line(lwd=1.5) +
     scale_colour_manual(values=c("Strikeouts"="darkgreen","Walks"="limegreen")) +
@@ -24,7 +23,6 @@ ggplot(time_data, aes(x=time, y=ypred, colour=iteration)) +
         plot.margin=unit(c(0.6,1.1,0.8,0.8), "cm"),
         axis.text.x=element_text(family="avenir_next", size=11), axis.text.y=element_text(family="avenir_next", size=12),
         axis.ticks=element_line(colour="ivory3", size=.4), axis.title=element_blank(), legend.position="none")
-),device="png", path="/Users/geraldschifman/Documents/__Shadows", units="cm", dpi=500, width=18, height=14)
 
 
 #Chart 2: Heat maps
@@ -35,7 +33,6 @@ sun_data$ypred2 <- round(ifelse(sun_data$iteration=="Strikeouts",(sun_data$ypred
 
 quartzFonts(avenir_next=c("Avenir Next Medium", "Avenir Next Demi Bold", "Avenir Next Bold", "Avenir Next Bold Italic"))
 
-ggsave("kbb_heatmaps.png", plot=(
 ggplot(sun_data, aes(x=azimuth, y=altitude)) + 
     geom_tile(aes(fill=ypred2)) +
     scale_fill_gradient2("Difference from\nleague average", low="dodgerblue", mid="ghostwhite", high="firebrick1", guide="colourbar", midpoint=0, limits=c(-0.02,0.02), breaks=c(-0.02,-0.01,0,0.01,0.02), labels=c("–2%","–1%","0%","+1%","+2%")) +
@@ -50,4 +47,3 @@ ggplot(sun_data, aes(x=azimuth, y=altitude)) +
     theme(legend.key.size=unit(0.8,"cm"), legend.key.height=unit(1.6,"cm"), legend.title=element_text(size=13, face="bold", family="avenir_next"), legend.text=element_text(size=12.5, family="avenir_next"), legend.margin=margin(l=16, r=-10)) +
     geom_hline(yintercept=seq(0,40,by=20), linetype="dashed", colour="ivory4", alpha=0.25, size=.4) +
     geom_vline(xintercept=seq(0,120,by=30), linetype="dashed", colour="ivory4", alpha=0.25, size=.4)
-),device="png",path="/Users/geraldschifman/Documents/__Shadows",units="cm",dpi=500, width=17, height=16.5)
